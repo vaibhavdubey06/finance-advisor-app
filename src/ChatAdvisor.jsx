@@ -134,7 +134,7 @@ const ChatAdvisor = () => {
         max_tokens: 500,
       };
       const response = await axios.post(
-        'http://localhost:3001/api/chat',
+        'https://finance-advisor-app-1.onrender.com/api/chat',
         payload,
         {
           headers: {
