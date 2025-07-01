@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { db } from './firebase';
+import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
+import { db, auth } from './firebase';
 import { doc, getDoc, updateDoc, collection, getDocs, setDoc } from 'firebase/firestore';
 import Charts from './Charts';
 
@@ -190,6 +190,15 @@ const Dashboard = () => {
     }
   };
 
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      alert('Failed to log out.');
+    }
+  };
+
   if (loading) {
     return <div style={{ textAlign: 'center', marginTop: '2rem' }}>Loading...</div>;
   }
@@ -207,146 +216,154 @@ const Dashboard = () => {
   const progress = clamp((savings / goalAmount) * 100, 0, 100);
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f9f9f9', padding: 16 }}>
-      <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', padding: 32, maxWidth: 420, width: '100%', display: 'flex', flexDirection: 'column', gap: 24, marginBottom: 32 }}>
-        <h2 style={{ textAlign: 'center', marginBottom: 8, color: '#222' }}>Your Financial Dashboard</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <div style={{ background: '#f6f8fa', borderRadius: 8, padding: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 13, color: '#444' }}>Monthly Income</div>
-            <div style={{ fontWeight: 600, fontSize: 20, color: '#222' }}>{formatAmount(income)}</div>
+    <div style={{ position: 'relative', padding: '1rem' }}>
+      <button
+        onClick={handleLogout}
+        style={{ position: 'absolute', top: 16, right: 16, background: '#f44336', color: '#fff', border: 'none', borderRadius: 5, padding: '6px 16px', cursor: 'pointer', fontWeight: 600 }}
+      >
+        Logout
+      </button>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f9f9f9', padding: 16 }}>
+        <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', padding: 32, maxWidth: 420, width: '100%', display: 'flex', flexDirection: 'column', gap: 24, marginBottom: 32 }}>
+          <h2 style={{ textAlign: 'center', marginBottom: 8, color: '#222' }}>Your Financial Dashboard</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ background: '#f6f8fa', borderRadius: 8, padding: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 13, color: '#444' }}>Monthly Income</div>
+              <div style={{ fontWeight: 600, fontSize: 20, color: '#222' }}>{formatAmount(income)}</div>
+            </div>
+            <div style={{ background: '#f6f8fa', borderRadius: 8, padding: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 13, color: '#444' }}>Monthly Expenses</div>
+              <div style={{ fontWeight: 600, fontSize: 20, color: '#222' }}>{formatAmount(expenses)}</div>
+            </div>
+            <div style={{ background: '#e3fcec', borderRadius: 8, padding: 16, textAlign: 'center', gridColumn: 'span 2' }}>
+              <div style={{ fontSize: 13, color: '#388e3c' }}>Calculated Monthly Savings</div>
+              <div style={{ fontWeight: 600, fontSize: 20, color: '#388e3c' }}>{formatAmount(monthlySavings)}</div>
+            </div>
           </div>
-          <div style={{ background: '#f6f8fa', borderRadius: 8, padding: 16, textAlign: 'center' }}>
-            <div style={{ fontSize: 13, color: '#444' }}>Monthly Expenses</div>
-            <div style={{ fontWeight: 600, fontSize: 20, color: '#222' }}>{formatAmount(expenses)}</div>
+          <div style={{ background: '#f3f4f6', borderRadius: 8, padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4, color: '#222' }}>Goal: {goal || '—'}</div>
+            <div style={{ fontSize: 14, color: '#333' }}>Target: <b>{formatAmount(goalAmount)}</b></div>
+            <div style={{ fontSize: 14, color: '#333' }}>Deadline: <b>{goalDeadline || '—'}</b></div>
+            {!editing && (
+              <button onClick={handleEditGoal} style={{ marginTop: 12, background: '#007bff', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 500, cursor: 'pointer' }}>Edit Goal</button>
+            )}
+            {editing && (
+              <form onSubmit={handleSaveGoal} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+                <input
+                  type="text"
+                  value={editGoalName}
+                  onChange={e => setEditGoalName(e.target.value)}
+                  placeholder="Goal name"
+                  required
+                  style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
+                />
+                <input
+                  type="number"
+                  value={editGoalAmount}
+                  onChange={e => setEditGoalAmount(e.target.value)}
+                  placeholder="Goal amount"
+                  required
+                  min={0}
+                  style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
+                />
+                <input
+                  type="date"
+                  value={editGoalDeadline}
+                  onChange={e => setEditGoalDeadline(e.target.value)}
+                  required
+                  style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
+                />
+                <button type="submit" disabled={saving} style={{ background: '#388e3c', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontWeight: 600, fontSize: 15, cursor: saving ? 'not-allowed' : 'pointer', marginTop: 4 }}>{saving ? 'Saving...' : 'Save'}</button>
+              </form>
+            )}
+            {success && <div style={{ color: success === 'Goal updated successfully!' ? '#388e3c' : 'red', marginTop: 8, fontWeight: 500 }}>{success}</div>}
           </div>
-          <div style={{ background: '#e3fcec', borderRadius: 8, padding: 16, textAlign: 'center', gridColumn: 'span 2' }}>
-            <div style={{ fontSize: 13, color: '#388e3c' }}>Calculated Monthly Savings</div>
-            <div style={{ fontWeight: 600, fontSize: 20, color: '#388e3c' }}>{formatAmount(monthlySavings)}</div>
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 14, marginBottom: 4 }}>Progress toward your goal:</div>
+            <div style={{ background: '#e0e0e0', borderRadius: 8, height: 18, width: '100%', overflow: 'hidden' }}>
+              <div style={{ background: '#007bff', height: '100%', width: `${progress}%`, borderRadius: 8, transition: 'width 0.5s' }} />
+            </div>
+            <div style={{ fontSize: 15, marginTop: 8, textAlign: 'center' }}>
+              You're <b>{progress.toFixed(1)}%</b> of the way toward your goal.
+            </div>
+          </div>
+          {/* Add/Edit Monthly Data UI */}
+          <div style={{ marginTop: 24 }}>
+            <button onClick={handleAddMonthly} style={{ background: '#007bff', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 500, cursor: 'pointer', marginBottom: 12 }}>Add Monthly Data</button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              {monthlyData && monthlyData.length > 0 && monthlyData.map((m) => (
+                <button
+                  key={m.month}
+                  onClick={() => handleEditMonthly(m)}
+                  style={{
+                    background: '#e9f1ff',
+                    border: '1.5px solid #007bff',
+                    borderRadius: 5,
+                    padding: '6px 14px',
+                    fontSize: 14,
+                    color: '#007bff',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s, color 0.2s',
+                  }}
+                  onMouseOver={e => {
+                    e.currentTarget.style.background = '#007bff';
+                    e.currentTarget.style.color = '#fff';
+                  }}
+                  onMouseOut={e => {
+                    e.currentTarget.style.background = '#e9f1ff';
+                    e.currentTarget.style.color = '#007bff';
+                  }}
+                >
+                  {m.month}
+                </button>
+              ))}
+            </div>
+            {showMonthlyForm && (
+              <form onSubmit={handleSaveMonthly} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10, background: '#f6f8fa', borderRadius: 8, padding: 16 }}>
+                <input
+                  type="text"
+                  value={monthInput}
+                  onChange={e => setMonthInput(e.target.value)}
+                  placeholder="Month (e.g. Jan 2024)"
+                  required
+                  style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
+                />
+                <input
+                  type="number"
+                  value={incomeInput}
+                  onChange={e => setIncomeInput(e.target.value)}
+                  placeholder="Income"
+                  required
+                  min={0}
+                  style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
+                />
+                <input
+                  type="number"
+                  value={expensesInput}
+                  onChange={e => setExpensesInput(e.target.value)}
+                  placeholder="Expenses"
+                  required
+                  min={0}
+                  style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
+                />
+                <input
+                  type="number"
+                  value={savingsInput}
+                  onChange={e => setSavingsInput(e.target.value)}
+                  placeholder="Savings"
+                  required
+                  min={0}
+                  style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
+                />
+                <button type="submit" disabled={saving} style={{ background: '#388e3c', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontWeight: 600, fontSize: 15, cursor: saving ? 'not-allowed' : 'pointer', marginTop: 4 }}>{saving ? 'Saving...' : 'Save'}</button>
+                {monthlyFormMsg && <div style={{ color: monthlyFormMsg === 'Saved!' ? '#388e3c' : 'red', marginTop: 8, fontWeight: 500 }}>{monthlyFormMsg}</div>}
+              </form>
+            )}
           </div>
         </div>
-        <div style={{ background: '#f3f4f6', borderRadius: 8, padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4, color: '#222' }}>Goal: {goal || '—'}</div>
-          <div style={{ fontSize: 14, color: '#333' }}>Target: <b>{formatAmount(goalAmount)}</b></div>
-          <div style={{ fontSize: 14, color: '#333' }}>Deadline: <b>{goalDeadline || '—'}</b></div>
-          {!editing && (
-            <button onClick={handleEditGoal} style={{ marginTop: 12, background: '#007bff', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 500, cursor: 'pointer' }}>Edit Goal</button>
-          )}
-          {editing && (
-            <form onSubmit={handleSaveGoal} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-              <input
-                type="text"
-                value={editGoalName}
-                onChange={e => setEditGoalName(e.target.value)}
-                placeholder="Goal name"
-                required
-                style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
-              />
-              <input
-                type="number"
-                value={editGoalAmount}
-                onChange={e => setEditGoalAmount(e.target.value)}
-                placeholder="Goal amount"
-                required
-                min={0}
-                style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
-              />
-              <input
-                type="date"
-                value={editGoalDeadline}
-                onChange={e => setEditGoalDeadline(e.target.value)}
-                required
-                style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
-              />
-              <button type="submit" disabled={saving} style={{ background: '#388e3c', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontWeight: 600, fontSize: 15, cursor: saving ? 'not-allowed' : 'pointer', marginTop: 4 }}>{saving ? 'Saving...' : 'Save'}</button>
-            </form>
-          )}
-          {success && <div style={{ color: success === 'Goal updated successfully!' ? '#388e3c' : 'red', marginTop: 8, fontWeight: 500 }}>{success}</div>}
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 14, marginBottom: 4 }}>Progress toward your goal:</div>
-          <div style={{ background: '#e0e0e0', borderRadius: 8, height: 18, width: '100%', overflow: 'hidden' }}>
-            <div style={{ background: '#007bff', height: '100%', width: `${progress}%`, borderRadius: 8, transition: 'width 0.5s' }} />
-          </div>
-          <div style={{ fontSize: 15, marginTop: 8, textAlign: 'center' }}>
-            You're <b>{progress.toFixed(1)}%</b> of the way toward your goal.
-          </div>
-        </div>
-        {/* Add/Edit Monthly Data UI */}
-        <div style={{ marginTop: 24 }}>
-          <button onClick={handleAddMonthly} style={{ background: '#007bff', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 500, cursor: 'pointer', marginBottom: 12 }}>Add Monthly Data</button>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-            {monthlyData && monthlyData.length > 0 && monthlyData.map((m) => (
-              <button
-                key={m.month}
-                onClick={() => handleEditMonthly(m)}
-                style={{
-                  background: '#e9f1ff',
-                  border: '1.5px solid #007bff',
-                  borderRadius: 5,
-                  padding: '6px 14px',
-                  fontSize: 14,
-                  color: '#007bff',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'background 0.2s, color 0.2s',
-                }}
-                onMouseOver={e => {
-                  e.currentTarget.style.background = '#007bff';
-                  e.currentTarget.style.color = '#fff';
-                }}
-                onMouseOut={e => {
-                  e.currentTarget.style.background = '#e9f1ff';
-                  e.currentTarget.style.color = '#007bff';
-                }}
-              >
-                {m.month}
-              </button>
-            ))}
-          </div>
-          {showMonthlyForm && (
-            <form onSubmit={handleSaveMonthly} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10, background: '#f6f8fa', borderRadius: 8, padding: 16 }}>
-              <input
-                type="text"
-                value={monthInput}
-                onChange={e => setMonthInput(e.target.value)}
-                placeholder="Month (e.g. Jan 2024)"
-                required
-                style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
-              />
-              <input
-                type="number"
-                value={incomeInput}
-                onChange={e => setIncomeInput(e.target.value)}
-                placeholder="Income"
-                required
-                min={0}
-                style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
-              />
-              <input
-                type="number"
-                value={expensesInput}
-                onChange={e => setExpensesInput(e.target.value)}
-                placeholder="Expenses"
-                required
-                min={0}
-                style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
-              />
-              <input
-                type="number"
-                value={savingsInput}
-                onChange={e => setSavingsInput(e.target.value)}
-                placeholder="Savings"
-                required
-                min={0}
-                style={{ padding: 8, borderRadius: 5, border: '1px solid #bbb', fontSize: 15 }}
-              />
-              <button type="submit" disabled={saving} style={{ background: '#388e3c', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontWeight: 600, fontSize: 15, cursor: saving ? 'not-allowed' : 'pointer', marginTop: 4 }}>{saving ? 'Saving...' : 'Save'}</button>
-              {monthlyFormMsg && <div style={{ color: monthlyFormMsg === 'Saved!' ? '#388e3c' : 'red', marginTop: 8, fontWeight: 500 }}>{monthlyFormMsg}</div>}
-            </form>
-          )}
-        </div>
+        <Charts monthlyData={monthlyLoading ? mockMonthlyData : monthlyData} />
       </div>
-      <Charts monthlyData={monthlyLoading ? mockMonthlyData : monthlyData} />
     </div>
   );
 };

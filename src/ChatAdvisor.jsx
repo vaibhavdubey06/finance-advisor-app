@@ -99,23 +99,37 @@ const ChatAdvisor = () => {
       return;
     }
     setLoading(true);
-    // Add the user's question to the chat history
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const newMessages = [
-      ...messages.length === 0
-        ? [
-            { role: 'system', content: 'You are a friendly and knowledgeable financial advisor.' },
-            { role: 'user', content: `You are a trusted personal finance advisor helping a young professional manage their money smartly.\n\nUser Profile:\n- Monthly Income: ₹${profile.income || 0}\n- Monthly Expenses: ₹${profile.expenses || 0}\n- Current Savings: ₹${profile.savings || 0}\n- Financial Goal: ${profile.goal || ''} worth ₹${profile.goalAmount || 0}, target by ${profile.goalDeadline || ''}\n\nThey asked: \"${question}\"\n\nGive friendly, practical advice. Mention if they're on track or what to adjust. Keep it clear, non-technical, and motivating.`, timestamp }
-          ]
-        : [...messages, { role: 'user', content: question, timestamp }]
-    ];
+    let newMessages;
+    let apiMessages;
+    if (messages.length === 0) {
+      // Only show the user's question in the UI, but send the full prompt to the backend
+      newMessages = [
+        { role: 'user', content: question, timestamp }
+      ];
+      apiMessages = [
+        { role: 'system', content: 'You are a friendly and knowledgeable financial advisor.' },
+        { role: 'user', content: `You are a trusted personal finance advisor helping a young professional manage their money smartly.\n\nUser Profile:\n- Monthly Income: ₹${profile.income || 0}\n- Monthly Expenses: ₹${profile.expenses || 0}\n- Current Savings: ₹${profile.savings || 0}\n- Financial Goal: ${profile.goal || ''} worth ₹${profile.goalAmount || 0}, target by ${profile.goalDeadline || ''}\n\nThey asked: \"${question}\"\n\nGive friendly, practical advice. Mention if they're on track or what to adjust. Keep it clear, non-technical, and motivating.` }
+      ];
+    } else {
+      newMessages = [...messages, { role: 'user', content: question, timestamp }];
+      apiMessages = [
+        ...messages.filter(m => m.role !== 'system').map(({ role, content }) => ({ role, content })),
+        { role: 'user', content: question }
+      ];
+      // Optionally, you can prepend the system prompt to apiMessages if needed for context
+      apiMessages = [
+        { role: 'system', content: 'You are a friendly and knowledgeable financial advisor.' },
+        ...apiMessages
+      ];
+    }
     setMessages(newMessages);
     setQuestion('');
     try {
       const payload = {
         model: 'llama3-70b-8192',
-        messages: newMessages.map(({ role, content }) => ({ role, content })), // Only send role/content to API
+        messages: apiMessages,
         temperature: 0.7,
         max_tokens: 500,
       };
@@ -128,7 +142,6 @@ const ChatAdvisor = () => {
           },
         }
       );
-      // Add the assistant's reply to the chat history
       const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setMessages((prev) => [
         ...newMessages,
