@@ -81,7 +81,7 @@ const LandingPage = () => {
           <h1 className="text-4xl md:text-6xl font-extrabold mb-4 drop-shadow-lg">Your AI-Powered Personal Finance Advisor</h1>
           <p className="text-lg md:text-2xl mb-8 max-w-2xl">Track your finances, set goals, and get smart, personalized advice — all in one place.</p>
           <button
-            onClick={() => navigate('/app')}
+            onClick={() => handleOpenLogin(false)}
             className="bg-teal-500 hover:bg-teal-400 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-all duration-200 text-lg"
           >
             Get Started
