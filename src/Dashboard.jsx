@@ -3,6 +3,7 @@ import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { doc, getDoc, updateDoc, collection, getDocs, setDoc } from 'firebase/firestore';
 import Charts from './Charts';
+import StatementUpload from './StatementUpload';
 
 function formatAmount(amount) {
   return `₹${Number(amount).toLocaleString('en-IN')}`;
@@ -364,6 +365,7 @@ const Dashboard = () => {
         </div>
         <Charts monthlyData={monthlyLoading ? mockMonthlyData : monthlyData} />
       </div>
+      <StatementUpload />
     </div>
   );
 };
