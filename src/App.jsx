@@ -26,9 +26,7 @@ function MainApp() {
             <div style={{ width: '100%', maxWidth: 600, margin: '0 auto', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', borderRadius: 10, background: '#fff', marginBottom: 32 }}>
               <Dashboard />
             </div>
-            <div style={{ width: '100%', maxWidth: 600, margin: '0 auto', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', borderRadius: 10, background: '#fff' }}>
-              <ChatAdvisor />
-            </div>
+         
           </div>
         ) : (
           <Navigate to="/" state={{ from: location }} replace />

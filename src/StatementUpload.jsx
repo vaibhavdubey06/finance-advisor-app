@@ -53,29 +53,51 @@ const StatementUpload = () => {
   const handleConfirm = async () => {
     if (!user) {
       setError('You must be logged in to upload statements.');
+      console.log('Upload failed: user not logged in');
       return;
     }
     setLoading(true);
     try {
+      console.log('Parsing file:', file);
       const parsedData = await new Promise((resolve, reject) => {
         Papa.parse(file, {
           header: true,
           skipEmptyLines: true,
           complete: (results) => {
-            if (results.errors.length) reject(results.errors);
-            else resolve(results.data);
+            if (results.errors.length) {
+              console.log('PapaParse errors:', results.errors);
+              reject(results.errors);
+            } else {
+              console.log('PapaParse data:', results.data);
+              resolve(results.data);
+            }
           },
-          error: reject,
+          error: (err) => {
+            console.log('PapaParse error:', err);
+            reject(err);
+          },
         });
       });
       let relevantData = [];
       if (type === 'bank') {
-        relevantData = parsedData.map(row => ({
-          date: row.Date || row.date,
-          description: row.Description || row.description,
-          amount: row.Amount || row.amount || row['Debit/Credit'],
-          balance: row.Balance || row.balance,
-        }));
+        relevantData = parsedData.map(row => {
+          // Remove commas and parse as float
+          const deposits = row.Deposits ? parseFloat(row.Deposits.replace(/,/g, '')) : 0;
+          const withdrawals = row.Withdrawals ? parseFloat(row.Withdrawals.replace(/,/g, '')) : 0;
+          let amount;
+          if (deposits && deposits !== 0) amount = deposits;
+          else if (withdrawals && withdrawals !== 0) amount = -withdrawals;
+          else if (row.Amount) amount = parseFloat(row.Amount.replace(/,/g, ''));
+          else if (row.amount) amount = parseFloat(row.amount.replace(/,/g, ''));
+          else if (row['Debit/Credit']) amount = parseFloat(row['Debit/Credit'].replace(/,/g, ''));
+          else amount = undefined;
+          return {
+            date: row.Date || row.date,
+            description: row.Description || row.description,
+            amount,
+            balance: row.Balance || row.balance,
+          };
+        }).filter(item => item.amount !== undefined);
       } else {
         relevantData = parsedData.map(row => ({
           name: row['Stock/Mutual Fund Name'] || row.Name || row.name,
@@ -84,13 +106,17 @@ const StatementUpload = () => {
           currentValue: row['Current Value'] || row.currentValue,
         }));
       }
+      console.log('Relevant data to upload:', relevantData);
       const col = collection(db, type === 'bank' ? 'transactions' : 'holdings', user.uid, 'items');
       for (const item of relevantData) {
+        console.log('Uploading item:', item);
         await addDoc(col, item);
       }
       setStep(3);
+      console.log('Upload successful!');
     } catch (err) {
       setError('Failed to upload data. Please try again.');
+      console.log('Upload error:', err);
     } finally {
       setLoading(false);
     }

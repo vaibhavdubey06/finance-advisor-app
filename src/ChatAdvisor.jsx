@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { db } from './firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, setDoc, updateDoc, serverTimestamp, addDoc, query, orderBy, limit, startAfter } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import ProfileForm from './ProfileForm';
 
@@ -15,6 +15,12 @@ const ChatAdvisor = () => {
   const [messages, setMessages] = useState([]); // Chat history
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
+  const [transactions, setTransactions] = useState([]);
+  const [holdings, setHoldings] = useState([]);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [lastVisible, setLastVisible] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 20;
 
   useEffect(() => {
     const auth = getAuth();
@@ -45,6 +51,32 @@ const ChatAdvisor = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+    // Fetch transactions
+    const fetchTransactions = async () => {
+      try {
+        const txCol = collection(db, 'transactions', user.uid, 'items');
+        const txSnap = await getDocs(txCol);
+        setTransactions(txSnap.docs.map(doc => doc.data()));
+      } catch {
+        setTransactions([]);
+      }
+    };
+    // Fetch holdings
+    const fetchHoldings = async () => {
+      try {
+        const hCol = collection(db, 'holdings', user.uid, 'items');
+        const hSnap = await getDocs(hCol);
+        setHoldings(hSnap.docs.map(doc => doc.data()));
+      } catch {
+        setHoldings([]);
+      }
+    };
+    fetchTransactions();
+    fetchHoldings();
+  }, [user]);
+
   // Auto-scroll to latest message
   useEffect(() => {
     if (chatEndRef.current) {
@@ -59,6 +91,45 @@ const ChatAdvisor = () => {
       return () => clearTimeout(timer);
     }
   }, [showToast]);
+
+  // Load latest messages on mount or user change
+  useEffect(() => {
+    const fetchChatHistory = async () => {
+      if (!user) {
+        setChatHistory([]);
+        setLastVisible(null);
+        setHasMore(true);
+        return;
+      }
+      try {
+        const messagesCol = collection(db, 'chats', user.uid, 'messages');
+        const q = query(messagesCol, orderBy('timestamp', 'desc'), limit(PAGE_SIZE));
+        const snap = await getDocs(q);
+        const msgs = [];
+        snap.forEach(doc => msgs.push({ id: doc.id, ...doc.data() }));
+        setChatHistory(msgs.reverse());
+        setLastVisible(snap.docs[snap.docs.length - 1]);
+        setHasMore(snap.size === PAGE_SIZE);
+      } catch (err) {
+        setChatHistory([]);
+        setLastVisible(null);
+        setHasMore(false);
+      }
+    };
+    fetchChatHistory();
+  }, [user]);
+
+  const loadOlderMessages = async () => {
+    if (!user || !lastVisible) return;
+    const messagesCol = collection(db, 'chats', user.uid, 'messages');
+    const q = query(messagesCol, orderBy('timestamp', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
+    const snap = await getDocs(q);
+    const msgs = [];
+    snap.forEach(doc => msgs.push({ id: doc.id, ...doc.data() }));
+    setChatHistory(prev => [...msgs.reverse(), ...prev]);
+    setLastVisible(snap.docs[snap.docs.length - 1]);
+    setHasMore(snap.size === PAGE_SIZE);
+  };
 
   const handleProfileSaved = async () => {
     setFetching(true);
@@ -78,6 +149,13 @@ const ChatAdvisor = () => {
     } finally {
       setFetching(false);
     }
+  };
+
+  // Save a message to Firestore
+  const saveMessage = async (msgObj) => {
+    if (!user) return;
+    const messagesCol = collection(db, 'chats', user.uid, 'messages');
+    await addDoc(messagesCol, msgObj);
   };
 
   const handleSubmit = async (e) => {
@@ -101,28 +179,46 @@ const ChatAdvisor = () => {
     setLoading(true);
     const now = new Date();
     const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    let newMessages;
+    // Save user message
+    const userMsg = { sender: 'user', message: question, timestamp: new Date() };
+    setChatHistory(prev => [...prev, userMsg]);
+    await saveMessage({ ...userMsg, timestamp: serverTimestamp() });
     let apiMessages;
-    if (messages.length === 0) {
-      // Only show the user's question in the UI, but send the full prompt to the backend
-      newMessages = [
-        { role: 'user', content: question, timestamp }
-      ];
+    let newMessages;
+    let txSummary = '';
+    if (transactions && transactions.length > 0) {
+      const totalIncome = transactions.filter(t => Number(t.amount) > 0).reduce((sum, t) => sum + Number(t.amount), 0);
+      const totalExpenses = transactions.filter(t => Number(t.amount) < 0).reduce((sum, t) => sum + Number(t.amount), 0);
+      txSummary = `\nRecent Transactions (sample):\n` + transactions.slice(0, 5).map(t => `- ${t.date}: ${t.description} (${t.amount})`).join('\n') + `\nTotal Income: ₹${totalIncome}, Total Expenses: ₹${totalExpenses}`;
+    }
+    let holdingsSummary = '';
+    if (holdings && holdings.length > 0) {
+      const totalInvested = holdings.reduce((sum, h) => sum + Number(h.avgPrice) * Number(h.quantity), 0);
+      const totalCurrent = holdings.reduce((sum, h) => sum + Number(h.currentValue), 0);
+      holdingsSummary = `\nPortfolio Holdings (sample):\n` + holdings.slice(0, 5).map(h => `- ${h.name}: Qty ${h.quantity}, Avg Price ${h.avgPrice}, Current Value ${h.currentValue}`).join('\n') + `\nTotal Invested: ₹${totalInvested}, Current Value: ₹${totalCurrent}`;
+    }
+    if (Array.isArray(messages) && messages.length === 0) {
       apiMessages = [
         { role: 'system', content: 'You are a friendly and knowledgeable financial advisor.' },
-        { role: 'user', content: `You are a trusted personal finance advisor helping a young professional manage their money smartly.\n\nUser Profile:\n- Monthly Income: ₹${profile.income || 0}\n- Monthly Expenses: ₹${profile.expenses || 0}\n- Current Savings: ₹${profile.savings || 0}\n- Financial Goal: ${profile.goal || ''} worth ₹${profile.goalAmount || 0}, target by ${profile.goalDeadline || ''}\n\nThey asked: \"${question}\"\n\nGive friendly, practical advice. Mention if they're on track or what to adjust. Keep it clear, non-technical, and motivating.` }
+        { role: 'user', content: `You are a trusted personal finance advisor helping a young professional manage their money smartly.\n\nUser Profile:\n- Monthly Income: ₹${profile.income || 0}\n- Monthly Expenses: ₹${profile.expenses || 0}\n- Current Savings: ₹${profile.savings || 0}\n- Financial Goal: ${profile.goal || ''} worth ₹${profile.goalAmount || 0}, target by ${profile.goalDeadline || ''}${txSummary}${holdingsSummary}\n\nThey asked: \"${question}\"\n\nGive friendly, practical advice. Mention if they're on track or what to adjust. Keep it clear, non-technical, and motivating.` }
       ];
-    } else {
+      newMessages = [{ role: 'user', content: question, timestamp }];
+    } else if (Array.isArray(messages)) {
       newMessages = [...messages, { role: 'user', content: question, timestamp }];
       apiMessages = [
         ...messages.filter(m => m.role !== 'system').map(({ role, content }) => ({ role, content })),
         { role: 'user', content: question }
       ];
-      // Optionally, you can prepend the system prompt to apiMessages if needed for context
       apiMessages = [
         { role: 'system', content: 'You are a friendly and knowledgeable financial advisor.' },
         ...apiMessages
       ];
+    } else {
+      apiMessages = [
+        { role: 'system', content: 'You are a friendly and knowledgeable financial advisor.' },
+        { role: 'user', content: `You are a trusted personal finance advisor helping a young professional manage their money smartly.\n\nUser Profile:\n- Monthly Income: ₹${profile.income || 0}\n- Monthly Expenses: ₹${profile.expenses || 0}\n- Current Savings: ₹${profile.savings || 0}\n- Financial Goal: ${profile.goal || ''} worth ₹${profile.goalAmount || 0}, target by ${profile.goalDeadline || ''}${txSummary}${holdingsSummary}\n\nThey asked: \"${question}\"\n\nGive friendly, practical advice. Mention if they're on track or what to adjust. Keep it clear, non-technical, and motivating.` }
+      ];
+      newMessages = [{ role: 'user', content: question, timestamp }];
     }
     setMessages(newMessages);
     setQuestion('');
@@ -143,6 +239,10 @@ const ChatAdvisor = () => {
         }
       );
       const replyTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      // Save advisor message
+      const advisorMsg = { sender: 'advisor', message: response.data.choices?.[0]?.message?.content || 'No response from advisor.', timestamp: new Date() };
+      setChatHistory(prev => [...prev, advisorMsg]);
+      await saveMessage({ ...advisorMsg, timestamp: serverTimestamp() });
       setMessages((prev) => [
         ...newMessages,
         { role: 'assistant', content: response.data.choices?.[0]?.message?.content || 'No response from advisor.', timestamp: replyTimestamp }
@@ -184,17 +284,22 @@ const ChatAdvisor = () => {
       <h2 style={{ textAlign: 'center' }}>Chat with Your Financial Advisor</h2>
       <button onClick={handleClearChat} style={{ display: 'block', margin: '0 auto 1rem auto', background: '#f44336', color: '#fff', border: 'none', borderRadius: 5, padding: '6px 16px', cursor: 'pointer' }}>Clear Chat</button>
       <div style={{ minHeight: 200, maxHeight: 300, overflowY: 'auto', background: '#23272a', padding: 12, borderRadius: 6, marginBottom: 16 }}>
-        {messages.length === 0 && <div style={{ color: '#888' }}>Ask your first question to start the conversation.</div>}
-        {messages.filter(m => m.role !== 'system').map((msg, idx) => (
-          <div key={idx} style={{ display: 'flex', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-end', marginBottom: 12 }}>
+        {hasMore && (
+          <button onClick={loadOlderMessages} style={{ display: 'block', margin: '0 auto 1rem auto', background: '#007bff', color: '#fff', border: 'none', borderRadius: 5, padding: '6px 16px', cursor: 'pointer' }}>
+            Load older messages
+          </button>
+        )}
+        {chatHistory.length === 0 && <div style={{ color: '#888' }}>Ask your first question to start the conversation.</div>}
+        {chatHistory.map((msg, idx) => (
+          <div key={msg.id || idx} style={{ display: 'flex', flexDirection: msg.sender === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-end', marginBottom: 12 }}>
             {/* Avatar */}
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: msg.role === 'user' ? '#007bff' : '#4caf50', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 18, marginLeft: msg.role === 'user' ? 12 : 0, marginRight: msg.role === 'assistant' ? 12 : 0 }}>
-              {msg.role === 'user' ? 'U' : 'A'}
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: msg.sender === 'user' ? '#007bff' : '#4caf50', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 18, marginLeft: msg.sender === 'user' ? 12 : 0, marginRight: msg.sender === 'advisor' ? 12 : 0 }}>
+              {msg.sender === 'user' ? 'U' : 'A'}
             </div>
             {/* Chat bubble */}
-            <div style={{ background: msg.role === 'user' ? '#007bff' : '#fff', color: msg.role === 'user' ? '#fff' : '#222', borderRadius: 16, padding: '10px 16px', maxWidth: '70%', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', position: 'relative' }}>
-              <div style={{ fontSize: 15, whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-              <div style={{ fontSize: 11, color: msg.role === 'user' ? '#cce3ff' : '#888', textAlign: 'right', marginTop: 4 }}>{msg.timestamp}</div>
+            <div style={{ background: msg.sender === 'user' ? '#007bff' : '#fff', color: msg.sender === 'user' ? '#fff' : '#222', borderRadius: 16, padding: '10px 16px', maxWidth: '70%', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', position: 'relative' }}>
+              <div style={{ fontSize: 15, whiteSpace: 'pre-wrap' }}>{msg.message}</div>
+              <div style={{ fontSize: 11, color: msg.sender === 'user' ? '#cce3ff' : '#888', textAlign: 'right', marginTop: 4 }}>{msg.timestamp && msg.timestamp.toDate ? msg.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</div>
             </div>
           </div>
         ))}
