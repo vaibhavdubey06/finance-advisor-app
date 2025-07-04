@@ -84,7 +84,7 @@ const Dashboard = () => {
   const [goalsLoading, setGoalsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const tabRefs = useRef([]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     const auth = getAuth();
@@ -364,13 +364,13 @@ const Dashboard = () => {
 
   // Sidebar keyboard accessibility
   useEffect(() => {
-    if (!sidebarOpen) return;
+    if (!isOpen) return;
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') setSidebarOpen(false);
+      if (e.key === 'Escape') setIsOpen(false);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [sidebarOpen]);
+  }, [isOpen]);
 
   if (loading) {
     return <div style={{ textAlign: 'center', marginTop: '2rem' }}>Loading...</div>;
@@ -406,20 +406,30 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white relative">
-      {/* Hamburger Icon */}
-      <button
-        className="fixed top-4 left-4 z-50 p-2 rounded-md bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-400"
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open navigation menu"
-      >
-        <FaBars className="w-6 h-6 text-white" />
-      </button>
+      {/* Top Bar: Hamburger and Logout */}
+      <div className="flex justify-between items-center max-w-4xl mx-auto pt-6 px-4 sm:px-0">
+        {/* Hamburger Icon (Toggle Bar) */}
+        <button
+          className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-400 transition-all"
+          onClick={() => setIsOpen(v => !v)}
+          aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
+        >
+          <FaBars className="w-6 h-6 text-white" />
+        </button>
+        {/* Logout Button */}
+        <button
+          className="ml-auto bg-red-600 hover:bg-red-700 text-white font-semibold px-5 py-2 rounded-lg shadow transition-all focus:outline-none focus:ring-2 focus:ring-red-400"
+          onClick={handleLogout}
+        >
+          Logout
+        </button>
+      </div>
       {/* Overlay Sidebar */}
-      {sidebarOpen && (
+      {isOpen && (
         <>
           <div
             className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity duration-300"
-            onClick={() => setSidebarOpen(false)}
+            onClick={() => setIsOpen(false)}
             aria-label="Close navigation menu"
           />
           <nav
@@ -433,7 +443,7 @@ const Dashboard = () => {
                   key={tab.key}
                   className={`w-full text-left px-4 py-3 rounded-md font-semibold text-lg transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400
                     ${activeTab === tab.key ? 'bg-teal-600 text-white' : 'text-gray-200 hover:bg-gray-700 hover:text-teal-200'}`}
-                  onClick={() => { setActiveTab(tab.key); setSidebarOpen(false); }}
+                  onClick={() => { setActiveTab(tab.key); setIsOpen(false); }}
                   aria-current={activeTab === tab.key ? 'page' : undefined}
                 >
                   {tab.label}
