@@ -217,7 +217,7 @@ const Dashboard = () => {
   };
 
   const handleEditGoal = () => {
-    setEditing(true);
+    setEditing((prev) => !prev);
     setSuccess('');
   };
 
@@ -388,10 +388,11 @@ const Dashboard = () => {
   const monthlySavings = income - expenses;
   const progress = clamp((savings / goalAmount) * 100, 0, 100);
 
-  // Calculate averages from monthlyData
-  const avgIncome = monthlyData.length > 0 ? Math.round(monthlyData.reduce((sum, m) => sum + Number(m.income), 0) / monthlyData.length) : income;
-  const avgExpenses = monthlyData.length > 0 ? Math.round(monthlyData.reduce((sum, m) => sum + Number(m.expenses), 0) / monthlyData.length) : expenses;
-  const avgSavings = monthlyData.length > 0 ? Math.round(monthlyData.reduce((sum, m) => sum + Number(m.savings), 0) / monthlyData.length) : savings;
+  // If no real data, show all zeros
+  const isNoRealMonthlyData = !monthlyData || monthlyData.length === 0 || (monthlyData.length === mockMonthlyData.length && monthlyData.every((m, i) => m.income === mockMonthlyData[i].income && m.expenses === mockMonthlyData[i].expenses && m.savings === mockMonthlyData[i].savings));
+  const avgIncome = isNoRealMonthlyData ? 0 : Math.round(monthlyData.reduce((sum, m) => sum + Number(m.income), 0) / monthlyData.length);
+  const avgExpenses = isNoRealMonthlyData ? 0 : Math.round(monthlyData.reduce((sum, m) => sum + Number(m.expenses), 0) / monthlyData.length);
+  const avgSavings = isNoRealMonthlyData ? 0 : Math.round(monthlyData.reduce((sum, m) => sum + Number(m.savings), 0) / monthlyData.length);
 
   // Sort monthlyData by 'YYYY-MM' string for charts
   const sortedMonthlyData = [...(monthlyLoading ? mockMonthlyData : monthlyData)].sort(
@@ -403,6 +404,8 @@ const Dashboard = () => {
     const [year, month] = ym.split('-');
     return new Date(year, month - 1).toLocaleString('default', { month: 'short', year: 'numeric' });
   };
+
+  const showSetGoalPrompt = !profile.goal || !profile.goalAmount;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white relative">
@@ -454,6 +457,18 @@ const Dashboard = () => {
         </>
       )}
       <div className="max-w-4xl mx-auto pt-8">
+        {/* Set Goal Prompt */}
+        {showSetGoalPrompt && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-400 text-yellow-800 p-4 rounded-lg mb-6 flex items-center justify-between">
+            <div className="font-semibold text-lg">Set your first goal to start tracking your progress!</div>
+            <button
+              className="ml-4 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-5 py-2 rounded-lg shadow transition-all focus:outline-none focus:ring-2 focus:ring-teal-400"
+              onClick={() => { handleEditGoal(); setActiveTab('goals'); }}
+            >
+              Set Goal
+            </button>
+          </div>
+        )}
         {/* Tab Content */}
         <div className="mt-6">
           {/* Overview Tab */}

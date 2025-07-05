@@ -135,13 +135,19 @@ const StatementUpload = () => {
       <h2 className="text-2xl font-bold mb-4 text-teal-700">Upload Statement</h2>
       <div className="mb-4 flex gap-4">
         <button
-          className={`py-2 px-4 rounded ${type === 'bank' ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-700'}`}
+          className={`py-2 px-4 rounded font-semibold transition-all duration-150
+            ${type === 'bank'
+              ? 'bg-teal-500 text-white shadow-lg ring-2 ring-teal-300 scale-105'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
           onClick={() => setType('bank')}
         >
           Bank Statement
         </button>
         <button
-          className={`py-2 px-4 rounded ${type === 'portfolio' ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-700'}`}
+          className={`py-2 px-4 rounded font-semibold transition-all duration-150
+            ${type === 'portfolio'
+              ? 'bg-teal-500 text-white shadow-lg ring-2 ring-teal-300 scale-105'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
           onClick={() => setType('portfolio')}
         >
           Portfolio Report

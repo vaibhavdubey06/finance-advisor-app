@@ -3,6 +3,8 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, Go
 import { auth } from './firebase';
 import { useNavigate } from 'react-router-dom';
 import { FaGoogle } from 'react-icons/fa';
+import { setDoc, doc } from 'firebase/firestore';
+import { db } from './firebase';
 
 const Login = ({ initialSignup = false, onClose }) => {
   const [email, setEmail] = useState('');
@@ -17,8 +19,18 @@ const Login = ({ initialSignup = false, onClose }) => {
     setError('');
     setLoading(true);
     try {
+      let userCredential;
       if (isSignup) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Auto-create minimal profile in Firestore
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          income: 0,
+          expenses: 0,
+          savings: 0,
+          goal: '',
+          goalAmount: 0,
+          goalDeadline: '',
+        });
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
