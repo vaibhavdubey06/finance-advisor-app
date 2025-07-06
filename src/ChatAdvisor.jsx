@@ -245,7 +245,7 @@ const ChatAdvisor = () => {
     setAbortController(localAbortController);
     try {
       // Streaming fetch with abort support
-      const response = await fetch('http://localhost:3001/api/groq', {
+      const response = await fetch('https://finance-advisor-app-1.onrender.com/api/groq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: conversation, stream: true }),
