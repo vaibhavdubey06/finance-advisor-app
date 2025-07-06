@@ -70,3 +70,6 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+@keyframes blink { to { visibility: hidden; } }
+.animate-blink { animation: blink 1s steps(2, start) infinite; }
