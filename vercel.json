@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "cd finance-advisor-app && npm run build",
   "outputDirectory": "finance-advisor-app/dist",
   "installCommand": "cd finance-advisor-app && npm install",
   "framework": "vite"
