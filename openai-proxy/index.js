@@ -5,7 +5,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://finance-advisor-app-peach.vercel.app', // your Vercel frontend
+    'http://localhost:5173' // local dev, optional
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // OpenRouter/Claude endpoint
